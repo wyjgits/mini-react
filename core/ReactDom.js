@@ -1,4 +1,4 @@
-import React from './React.ts';
+import React from './React.js';
 function createRoot(container) {
   return {
     render(App) {
