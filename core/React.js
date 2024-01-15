@@ -1,6 +1,5 @@
 
 function createTextNode(text) {
-  console.log('use createTextNode')
   return {
     type: 'TEXT_ELEMENT',
     props: {
@@ -22,6 +21,7 @@ function createElement(type, props, ...children) {
   }
 }
 
+let root = null;
 function render(el, container) {
   nextWorkOfUnit = {
     dom: container,
@@ -29,24 +29,25 @@ function render(el, container) {
       children: [el]
     }
   }
-  // const dom = el.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(el.type)
-  // const props = el.props;
-  // Object.keys(props).forEach(key => {
-  //   if (key !== 'children') {
-  //     dom[key] = props[key];
-  //   }
-  // })
-  // const children = el.props.children;
-
-  // children.forEach(child => {
-  //   render(child, dom);
-  // })
-
-
-  // container.append(dom);
+  root = nextWorkOfUnit;
 }
 
 let nextWorkOfUnit = null;
+
+function commitRoot() {
+  console.log('commitRoot')
+  if(root) {
+    commitWork(root.child);
+    root = null
+  }
+}
+
+function commitWork(fiber) {
+  if(!fiber) return;
+  fiber.parent.dom.append(fiber.dom);
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
 function workLoop(deadline) {
   let shouldYield = false;
   while (!shouldYield && nextWorkOfUnit) {
@@ -54,15 +55,11 @@ function workLoop(deadline) {
 
     shouldYield = deadline.timeRemaining() < 1;
   }
+  if(!nextWorkOfUnit && root) {
+    commitRoot();
+  }
 
   requestIdleCallback(workLoop);
-}
-
-function mountDom(fiber) {
-  const dom = fiber.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(fiber.type);
-  fiber.dom = dom;
-  fiber.parent.dom.append(dom);
-  return dom;
 }
 
 function updateProps(dom, props) {
@@ -97,7 +94,8 @@ function initChildren(fiber) {
 
 function performWorkOfUnit(fiber) {
   if (!fiber.dom) {
-    const dom = mountDom(fiber);
+    const dom = fiber.dom = fiber.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(fiber.type);
+    // fiber.parent.dom.append(dom)
     updateProps(dom, fiber.props)
   }
   initChildren(fiber);
