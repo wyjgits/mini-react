@@ -15,10 +15,17 @@ function createElement(type, props, ...children) {
     props: {
       ...props,
       children: children.map(child => {
-        return typeof child === 'string' ? createTextNode(child) : child
+        const isText = typeof child === 'string' || typeof child === 'number'
+        return isText ? createTextNode(child) : child
       })
     },
   }
+}
+
+function createDom(type) {
+  return type === 'TEXT_ELEMENT'
+    ? document.createTextNode('')
+    : document.createElement(type)
 }
 
 let root = null;
@@ -44,7 +51,11 @@ function commitRoot() {
 
 function commitWork(fiber) {
   if(!fiber) return;
-  fiber.parent.dom.append(fiber.dom);
+  let fiberParent = fiber.parent
+  while (!fiberParent.dom) {
+    fiberParent = fiberParent.parent
+  }
+  fiber.dom && fiberParent.dom.append(fiber.dom);
   commitWork(fiber.child);
   commitWork(fiber.sibling);
 }
@@ -70,9 +81,8 @@ function updateProps(dom, props) {
   })
 }
 
-function initChildren(fiber) {
-  const children = fiber.props.children;
-
+function initChildren(fiber, children) {
+  console.log(fiber, children)
   let prevChild = null
   children.forEach((child, index) => {
     const newFiber = {
@@ -92,13 +102,27 @@ function initChildren(fiber) {
   })
 }
 
-function performWorkOfUnit(fiber) {
+function updateFunctionComponent(fiber) {
+  const children = [fiber.type(fiber.props)];
+  initChildren(fiber, children);
+}
+
+function updateHostFunction(fiber) {
   if (!fiber.dom) {
-    const dom = fiber.dom = fiber.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(fiber.type);
-    // fiber.parent.dom.append(dom)
+    const dom = fiber.dom = createDom(fiber.type);
     updateProps(dom, fiber.props)
   }
-  initChildren(fiber);
+  initChildren(fiber, fiber.props.children);
+}
+
+function performWorkOfUnit(fiber) {
+  const isFunctionComponent = typeof fiber.type === 'function';
+
+  if (isFunctionComponent) {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostFunction(fiber);
+  }
 
   if (fiber.child) {
     return fiber.child;
@@ -106,7 +130,11 @@ function performWorkOfUnit(fiber) {
   if (fiber.sibling) {
     return fiber.sibling;
   }
-  return fiber.parent?.sibling;
+  let fiberParent = fiber.parent;
+  while (fiberParent && !fiberParent.sibling) {
+    fiberParent = fiberParent.parent
+  }
+  return fiberParent?.sibling;
 }
 
 requestIdleCallback(workLoop)
