@@ -1,7 +1,14 @@
 import React from './core/React.js';
-const Counter = (props) => {
-  console.log('props',props)
-  return <div>counter: {props.num}</div>
+let count = 0;
+const Counter = () => {
+  const clickFn = () => {
+    count++;
+    React.update()
+  }
+  return <div>
+    counter: {count}
+    <button onClick={clickFn}>add</button>
+  </div>
 }
 const CounterContainer = () => {
   return <Counter num={3}></Counter>
