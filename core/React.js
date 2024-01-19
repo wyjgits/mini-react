@@ -180,6 +180,8 @@ function initChildren(fiber, children) {
 }
 
 function updateFunctionComponent(fiber) {
+  stateHooks = [];
+  stateHookIndex = 0;
   wipFiber = fiber;
   const children = [fiber.type(fiber.props)];
   initChildren(fiber, children);
@@ -217,9 +219,44 @@ function performWorkOfUnit(fiber) {
 
 requestIdleCallback(workLoop)
 
+let stateHooks;
+let stateHookIndex;
+function useState(initial) {
+  console.log('useState');
+  const currentFiber = wipFiber;
+  const oldHook = currentFiber.alternate?.stateHooks[stateHookIndex];
+  const stateHook = {
+    state: oldHook?.state || initial,
+    queue: oldHook?.queue || []
+  }
+
+  stateHook.queue.forEach(task => {
+    console.log('queue')
+    stateHook.state = task(stateHook.state)
+  })
+  stateHook.queue = []
+
+  stateHookIndex++;
+  stateHooks.push(stateHook);
+  currentFiber.stateHooks = stateHooks;
+  function setState(action) {
+    const eagerState = (typeof action === 'function' ? action(stateHook.state) : action);
+    if (eagerState === stateHook.state) return;
+    console.log('setState')
+    stateHook.queue.push(typeof action === 'function' ? action : () => action)
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber
+    }
+    nextWorkOfUnit = wipRoot;
+  }
+  return [stateHook.state, setState]
+}
+
 export default {
   render,
   update,
   createTextNode,
-  createElement
+  createElement,
+  useState
 }
