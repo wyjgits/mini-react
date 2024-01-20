@@ -57,11 +57,50 @@ let nextWorkOfUnit = null;
 function commitRoot() {
   deletions.forEach(commitDeletion);
   deletions = []
-  if (wipRoot) {
-    commitWork(wipRoot.child);
-    currentRoot = wipRoot;
-    wipRoot = null;
+  commitWork(wipRoot.child);
+  commitEffectHook();
+  currentRoot = wipRoot;
+  wipRoot = null;
+}
+
+function commitEffectHook() {
+  function run(fiber) {
+    if (fiber.effectHooks) {
+      if (fiber.alternate) {
+        fiber.effectHooks.forEach((effectHook, index) => {
+          const deps = effectHook.deps;
+          const oldDeps = fiber.alternate.effectHooks?.[index]?.deps || [];
+          const needUpdate = deps.some((dep, i) => dep !== oldDeps[i]);
+          if (needUpdate) {
+            effectHook.cleanup = effectHook.cb();
+          }
+        });
+      } else {
+        fiber.effectHooks.forEach(effectHook => {
+          effectHook.cleanup = effectHook.cb();
+        })
+      }
+    }
+    if (fiber.child) {
+      run(fiber.child)
+    }
+    if (fiber.sibling) {
+      run(fiber.sibling)
+    }
   }
+  function cleanup(fiber) {
+    fiber.alternate?.effectHooks?.forEach(hook => {
+      hook.deps.length && hook.cleanup && hook.cleanup();
+    })
+    if (fiber.child) {
+      cleanup(fiber.child)
+    }
+    if (fiber.sibling) {
+      cleanup(fiber.sibling)
+    }
+  }
+  cleanup(wipRoot);
+  run(wipRoot)
 }
 
 function commitDeletion(fiber) {
@@ -181,6 +220,7 @@ function initChildren(fiber, children) {
 
 function updateFunctionComponent(fiber) {
   stateHooks = [];
+  effectHooks = [];
   stateHookIndex = 0;
   wipFiber = fiber;
   const children = [fiber.type(fiber.props)];
@@ -252,11 +292,22 @@ function useState(initial) {
   }
   return [stateHook.state, setState]
 }
+let effectHooks = [];
+function useEffect(cb, deps) {
+  const effectHook = {
+    cb,
+    deps,
+    cleanup: null
+  }
+  effectHooks.push(effectHook);
+  wipFiber.effectHooks = effectHooks;
+}
 
 export default {
   render,
   update,
   createTextNode,
   createElement,
-  useState
+  useState,
+  useEffect
 }
